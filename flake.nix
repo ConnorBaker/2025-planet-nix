@@ -76,6 +76,21 @@
               nativeBuildInputs = [ pkgs.ripgrep ];
 
               buildCommandPath = ./build-typst-packages-cache.bash;
+
+              postInstall = ''
+                if [[ -f "$outputPackagesDir/nulite/0.1.0/lib.typ" ]]; then
+                  nixLog "patching nulite 0.1.0"
+                  # Remove the symlink
+                  rm "$outputPackagesDir/nulite/0.1.0"
+                  # Copy the file
+                  cp -r "$inputPackagesDir/nulite/0.1.0" "$outputPackagesDir/nulite/0.1.0"
+                  # Patch the file
+                  substituteInPlace "$outputPackagesDir/nulite/0.1.0/lib.typ" \
+                    --replace-fail \
+                      '#let ctx-name = "@preview/vegalite"' \
+                      '#let ctx-name = "@preview/nulite"'
+                fi
+              '';
             };
 
           typstPackagesCache = buildTypstPackagesCache inputs.typst-packages "${./imports.typ}";
@@ -83,8 +98,10 @@
           src = toSource {
             root = ./.;
             fileset = unions [
+              ./aggregated.json
               ./imports.typ
               ./main.typ
+              ./vega-lite-specs
             ];
           };
 

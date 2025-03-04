@@ -94,3 +94,5 @@ findUnprocessedDependencies "${typstProjectSrc:?}"
 
 # Process the dependencies using a breadth-first search
 bfsProcessDependencies
+
+runHook postInstall

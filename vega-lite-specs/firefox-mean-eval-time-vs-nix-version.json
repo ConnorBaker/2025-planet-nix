@@ -1,0 +1,44 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "data": {
+    "values": []
+  },
+  "layer": [
+    {
+      "mark": {
+        "type": "point",
+        "opacity": 0.3
+      },
+      "encoding": {
+        "x": {
+          "field": "info.nixVersion",
+          "type": "ordinal"
+        },
+        "y": {
+          "field": "eval.cpuTime",
+          "type": "quantitative",
+          "scale": { "domain": [0.6, 0.8] }
+        }
+      }
+    },
+    {
+      "mark": {
+        "type": "line",
+        "strokeWidth": 4
+      },
+      "encoding": {
+        "x": {
+          "title": "Nix Version",
+          "field": "info.nixVersion",
+          "type": "ordinal"
+        },
+        "y": {
+          "title": "Mean CPU Time (s)",
+          "field": "eval.cpuTime",
+          "type": "quantitative",
+          "aggregate": "mean"
+        }
+      }
+    }
+  ]
+}
