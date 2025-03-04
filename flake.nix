@@ -78,12 +78,12 @@
               buildCommandPath = ./build-typst-packages-cache.bash;
             };
 
-          typstPackagesCache = buildTypstPackagesCache inputs.typst-packages "${./globals.typ}";
+          typstPackagesCache = buildTypstPackagesCache inputs.typst-packages "${./imports.typ}";
 
           src = toSource {
             root = ./.;
             fileset = unions [
-              ./globals.typ
+              ./imports.typ
               ./main.typ
             ];
           };
