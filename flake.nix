@@ -54,22 +54,18 @@
         let
           inherit (lib.attrsets) attrValues;
           inherit (lib.fileset) toSource unions;
-          inherit (lib.strings) optionalString;
-          inherit (pkgs.stdenv.hostPlatform) isDarwin;
 
           typixLib = inputs.typix.lib.${system};
-
-          # Yay for differences in how macOS and Linux handle cache directories :l
-          cacheDirPrefix = optionalString isDarwin "Library/Caches/";
-          cacheDirEnvName = optionalString (!isDarwin) "XDG_CACHE_" + "HOME";
 
           buildTypstPackagesCache =
             {
               # A list of directories each containing directories of the form `<namespace>/<package>/<version>`
-              packageSources,
+              packagesSources,
               # The Typst project to build
               projectSource,
             }:
+            # Produces an output containing containing directories of the form `<namespace>/<package>/<version>`.
+            # As such, the outPath can be provided to TYPST_PACKAGE_CACHE_PATH and TYPST_PACKAGE_PATH.
             pkgs.stdenvNoCC.mkDerivation {
               __structuredAttrs = true;
               strictDeps = true;
@@ -79,9 +75,8 @@
               name = "typst-packages-cache";
               src = null;
 
-              inherit packageSources;
+              inherit packagesSources;
               inherit projectSource;
-              inherit cacheDirPrefix;
 
               nativeBuildInputs = [ pkgs.ripgrep ];
 
@@ -94,31 +89,34 @@
                 owner = "typst";
                 repo = "packages";
                 rev = "d4ac49c134db967fb251d6dccd8fcce472da1cb3";
-                hash = "";
+                hash = "sha256-xVj8uVLCb5wy76MVTcQKb+A129sBYu4KqgjYV/E2mJE=";
               };
             in
             buildTypstPackagesCache {
-              packageSources = [
+              packagesSources = [
                 "${preview}/packages"
                 "${pkgs.nulite-typst}/share/typst/packages"
               ];
               projectSource = ./.;
             };
 
-          src = toSource {
-            root = ./.;
-            fileset = unions [
-              ./aggregated.json
-              ./imports.typ
-              ./main.typ
-              ./vega-lite-specs
-            ];
-          };
-
           commonArgs = {
             typstSource = "main.typ";
             fontPaths = [ "${pkgs.nacelle}/share/fonts/opentype" ];
             virtualPaths = [ ];
+            env = {
+              TYPST_PACKAGE_CACHE_PATH = typstPackagesCache.outPath;
+              TYPST_PACKAGE_PATH = typstPackagesCache.outPath;
+            };
+            src = toSource {
+              root = ./.;
+              fileset = unions [
+                ./aggregated.json
+                ./imports.typ
+                ./main.typ
+                ./vega-lite-specs
+              ];
+            };
           };
         in
         {
@@ -132,33 +130,26 @@
 
             # Compile a Typst project, *without* copying the result
             # to the current directory
-            build-drv = typixLib.buildTypstProject (
-              commonArgs
-              // {
-                inherit src;
-                ${cacheDirEnvName} = typstPackagesCache;
-              }
-            );
+            build-drv = typixLib.buildTypstProject commonArgs;
 
             # Compile a Typst project, and then copy the result
             # to the current directory
-            build-script = typixLib.buildTypstProjectLocal (
-              commonArgs
-              // {
-                inherit src;
-                ${cacheDirEnvName} = typstPackagesCache;
-              }
-            );
+            build-script = typixLib.buildTypstProjectLocal commonArgs;
 
             # Watch a project and recompile on changes
-            watch-script = typixLib.watchTypstProject commonArgs;
+            watch-script = typixLib.watchTypstProject (
+              builtins.removeAttrs commonArgs [
+                "env"
+                "src"
+              ]
+            );
           };
 
-          # apps = {
-          #   default = config.apps.watch;
-          #   build.program = build-script;
-          #   watch.program = watch-script;
-          # };
+          apps = {
+            default = config.apps.watch;
+            build.program = config.packages.build-script;
+            watch.program = config.packages.watch-script;
+          };
 
           devShells.default = typixLib.devShell {
             inherit (commonArgs) fontPaths virtualPaths;

@@ -111,11 +111,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1741142689,
-        "narHash": "sha256-oWf4zAXR+wi+bkmt3ArZvfYIiz6Nq9a15JRX7OztfAc=",
+        "lastModified": 1741146264,
+        "narHash": "sha256-rvkm2a2Ka03itKUCMSbrmXJxk/61RriRkivM1lrHrzU=",
         "owner": "ConnorBaker",
         "repo": "typst-vegalite",
-        "rev": "1e2967daf83503541576b939eacc93a4b3a4614e",
+        "rev": "c32b3c929f7c08b01c0e12626274453af9399987",
         "type": "github"
       },
       "original": {

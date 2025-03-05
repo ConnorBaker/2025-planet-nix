@@ -2,54 +2,43 @@
 
 set -euo pipefail
 
-# Only preview packages are supported for now
-declare -r inputPackagesDir="${typstPackagesSrc:?}/packages/preview"
-declare -r outputPackagesDir="${out:?}/${cacheDirPrefix:-}typst/packages/preview"
-
 # Associative array for fast lookups
-# Maps identifier (`@preview/typst:0.1.0`) to subpath (`typst/0.1.0`)
+# Maps subpath (`preview/typst:0.1.0`) to source (typst packages' @preview namespace)
 declare -Ag processedDependencies=()
+# Maps subpath (`preview/typst:0.1.0`) to search path from which it was found
 declare -Ag unprocessedDependencies=()
 
 findUnprocessedDependencies() {
   local -r searchPath="$1"
-  local -a identifiers=()
+  local -a subpaths=()
+  local subpath
 
-  nixLog "searching for dependencies in ${searchPath@Q}"
+  nixInfoLog "searching for dependencies in ${searchPath@Q}"
 
   # Find all dependencies in the file
-  mapfile -t identifiers < \
+  mapfile -t subpaths < \
     <(rg \
       --only-matching \
       --no-filename \
       --no-line-number \
       --no-column \
       --line-regexp \
-      --regexp '#import\s+"(@preview/[^":]+:[\d\.]+)".*' \
-      --replace '$1' \
+      --regexp '#import\s+"@([^"/]+)/([^":]+):([\d\.]+)".*' \
+      --replace '$1/$2/$3' \
+      --follow \
+      --type-add 'typst:*.typ' \
+      --type typst \
       "$searchPath" |
       sort -u)
 
-  local identifier
-  for identifier in "${identifiers[@]}"; do
-    # If the identifier is already processed, skip it
-    if [[ -n ${processedDependencies[$identifier]:-} ]]; then
-      nixLog "found processed dependency ${identifier@Q}, skipping"
-      continue
-    # If the identifier is waiting to be processed, skip it
-    elif [[ -n ${unprocessedDependencies[$identifier]:-} ]]; then
-      nixLog "found queued unprocessed dependency ${identifier@Q}, skipping"
-      continue
-    fi
-
-    # Otherwise, add it to the unprocessed dependencies
-    nixLog "found new unprocessed dependency ${identifier@Q}, adding"
-    # Use bash regex to extract the name and version
-    if [[ $identifier =~ ^@preview/([^:]+):([0-9\.]+)$ ]]; then
-      unprocessedDependencies["$identifier"]="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+  for subpath in "${subpaths[@]}"; do
+    if [[ -n ${processedDependencies[$subpath]:-} ]]; then
+      nixInfoLog "found processed dependency ${subpath@Q}, skipping"
+    elif [[ -n ${unprocessedDependencies[$subpath]:-} ]]; then
+      nixInfoLog "found queued unprocessed dependency ${subpath@Q}, skipping"
     else
-      nixLog "failed to parse identifier ${identifier@Q}"
-      exit 1
+      nixInfoLog "found new unprocessed dependency ${subpath@Q}, adding"
+      unprocessedDependencies["$subpath"]="$searchPath"
     fi
   done
 
@@ -57,32 +46,56 @@ findUnprocessedDependencies() {
 }
 
 bfsProcessDependencies() {
-  local -a identifiers
-  local identifier
+  local -a subpaths=()
   local subpath
-  local inputPath
   local outputPath
+  local packagesSource
+  local inputPath
 
   # While there are unprocessed dependencies
   while ((${#unprocessedDependencies[@]} > 0)); do
-    for identifier in "${!unprocessedDependencies[@]}"; do
-      subpath="${unprocessedDependencies[$identifier]}"
-      inputPath="$inputPackagesDir/$subpath"
-      outputPath="$outputPackagesDir/$subpath"
+    # Iterate through them
+    for subpath in "${!unprocessedDependencies[@]}"; do
+      outputPath="${out:?}/$subpath"
+      # Search through the available package sources for the dependency
+      # shellcheck disable=SC2154
+      for packagesSource in "${packagesSources[@]}"; do
+        inputPath="$packagesSource/$subpath"
 
-      # Add symlinks to the output packages dir
-      nixLog "creating symlink for dependency ${identifier@Q}"
-      mkdir -p "$(dirname "$outputPath")"
-      ln -s "$inputPath" "$outputPath"
+        # If the dependency is not found, skip it
+        if [[ ! -d $inputPath ]]; then
+          nixInfoLog "dependency ${subpath@Q} not found in ${packagesSource@Q}"
+          continue
+        fi
+        nixInfoLog "dependency ${subpath@Q} found in ${packagesSource@Q}"
 
-      # Find the dependencies of the dependency
-      nixLog "searching for dependencies of ${identifier@Q}"
-      findUnprocessedDependencies "$inputPath"
+        # NOTE: Because we check in findUnprocessedDependencies if the dependency has already been processed, or is
+        # waiting to be processed, we can assume that it is not a duplicate.
 
-      # Move it to the processed dependencies
-      nixLog "processed dependency ${identifier@Q}"
-      processedDependencies["$identifier"]="$subpath"
-      unset 'unprocessedDependencies[$identifier]'
+        # Add symlinks to the output packages dir -- symlinks the version directory
+        # to the output packages dir.
+        nixLog "creating symlink for dependency ${subpath@Q}"
+        mkdir -p "$(dirname "$outputPath")"
+        ln -s "$inputPath" "$outputPath"
+
+        # Move it to the processed dependencies
+        nixInfoLog "processed dependency ${subpath@Q}"
+        processedDependencies["$subpath"]="$packagesSource"
+        unset 'unprocessedDependencies[$subpath]'
+
+        # Find the dependencies of the dependency
+        nixInfoLog "searching for dependencies of ${subpath@Q}"
+        findUnprocessedDependencies "$inputPath"
+      done
+
+      # If the outputPath does not exist, it means the dependency was not found
+      if [[ ! -d $outputPath ]]; then
+        nixErrorLog "dependency ${subpath@Q} not found in any packages source:" \
+          "this may be a non-issue due to the dependency search algorithm" \
+          "including dependencies for manuals, tests, etc."
+        processedDependencies["$subpath"]="UNRESOLVED"
+        unset 'unprocessedDependencies[$subpath]'
+      fi
     done
   done
 
@@ -90,7 +103,7 @@ bfsProcessDependencies() {
 }
 
 # Initialize the unprocessed dependencies
-findUnprocessedDependencies "${typstProjectSrc:?}"
+findUnprocessedDependencies "${projectSource:?}"
 
 # Process the dependencies using a breadth-first search
 bfsProcessDependencies
