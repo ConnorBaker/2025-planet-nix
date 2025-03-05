@@ -1,6 +1,14 @@
 {
+  # attribute path relative to expression at `filePath`, e.g., `closures.smallContainer.x86_64-linux`
+  # NOTE: Should be properly escaped by `showAttrPath`.
   attrPath,
+  # file path relative to nixpkgs root, e.g., `nixos/release.nix`
+  filePath,
+  # Number of times to run the evaluation.
   numRuns,
+  # Nixpkgs instance to create the benchmark runner.
+  # NOTE: This is *not* used for the evaluation!
+  pkgs,
   # TODO: Flags for common stuff like GC initial heap size, disabling GC, using Nix built without GC, etc.
   system,
   nixpkgsFlakeUri,
@@ -12,18 +20,8 @@ let
   nixFlake = getFlake nixFlakeUri;
 
   inherit (nixFlake.packages.${system}) nix;
-  inherit (nixpkgsFlake) lib;
-  inherit (nixpkgsFlake.legacyPackages.${system})
-    jq
-    runCommand
-    time
-    writeTextDir
-    writeText
-    ;
 
-  inherit (lib.attrsets) showAttrPath;
-
-  nixConfDir = writeTextDir "nix.conf" ''
+  nixConfDir = pkgs.writeTextDir "nix.conf" ''
     allow-import-from-derivation = false
     eval-cache = false
     experimental-features = nix-command flakes
@@ -39,7 +37,7 @@ let
   '';
 
   # TODO: No proper escaping done on the command.
-  timeFormatJson = writeText "time-format.json" ''
+  timeFormatJson = pkgs.writeText "time-format.json" ''
     {
       "time": {
         "real": %e,
@@ -75,12 +73,9 @@ let
   '';
 
   numRunsString = toString numRuns;
-  attrPathString = showAttrPath attrPath;
 in
-runCommand
-  "nix-${nixFlake.shortRev}-eval-nixpkgs-${nixpkgsFlake.shortRev}-${system}-${attrPathString}-${numRunsString}-runs"
+pkgs.runCommand "nix-${nixFlake.shortRev}-eval-nixpkgs-${nixpkgsFlake.shortRev}"
   {
-    # __impure = true;
     allowSubstitutes = false;
     preferLocalBuild = true;
 
@@ -89,23 +84,20 @@ runCommand
 
     # The .dev output is selected by default, which isn't what we want.
     nativeBuildInputs = [
-      jq
+      pkgs.jq
       nix.out
-      time
+      pkgs.time
     ];
 
-    evalSystem = system;
-    nixArgs = [
-      "--print-build-logs"
-      "--show-trace"
+    nixEvalArgs = [
+      # "--print-build-logs"
+      # "--show-trace"
+      "--quiet"
       "--offline"
       "--system"
       system
       "--eval-system"
       system
-    ];
-    nixEvalArgs = [
-      "--offline"
       "--read-only"
       "--json"
       "--store"
@@ -130,14 +122,13 @@ runCommand
   # restricted eval.
   # NOTE: Still need to create the dummy stores since Nix will try to realize derivations even when provided with
   # the dummy store.
-  # TODO: Make a note of the Nix and Nixpkgs versions used.
   ''
     jq \
       --null-input \
       --sort-keys \
       --argjson numRuns "${numRunsString}" \
       --arg nixVersion "${nix.version}" \
-      --arg attrPath "${attrPathString}" \
+      --arg attrPath "${attrPath}" \
       --arg system "${system}" \
       --arg nixpkgsFlakeUri "${nixpkgsFlakeUri}" \
       --argjson nixpkgsFlakeLastModified ${toString nixpkgsFlake.lastModified} \
@@ -166,21 +157,22 @@ runCommand
         }
       }' > "info.json"
 
+    export NIX_PAGER=
     for runNum in {1..${numRunsString}}; do
       for dir in "''${nixDirs[@]}"; do
         export "$dir"="$(mktemp -d)"
       done
       export NIX_STORE="$NIX_STORE_DIR"
+      nix-store --init
 
       NIX_SHOW_STATS_PATH="eval.json" \
       time \
-        --format="$(cat "${timeFormatJson.outPath}")" \
+        --format="$(<"${timeFormatJson.outPath}")" \
         --output="time.json" \
         nix eval \
-          "''${nixArgs[@]}" \
           "''${nixEvalArgs[@]}" \
-          --file "${nixpkgsFlake.outPath}" \
-          "${attrPathString}" \
+          --file "${nixpkgsFlake.outPath}/${filePath}" \
+          "${attrPath}" \
           > /dev/null
 
       # Join the time and eval JSON files, nesting them under their respective keys, and append the result to the

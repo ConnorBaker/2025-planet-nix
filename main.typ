@@ -46,9 +46,9 @@
 )
 
 #let vegalite-data = json("aggregated.json")
-#let mk-vegalite-spec = (spec: json) => {
+#let mk-vegalite-spec(..spec) = {
   utils.merge-dicts(
-    spec,
+    spec.named(),
     (
       data: (values: vegalite-data),
       config: (
@@ -73,7 +73,20 @@
   width: 100%,
   height: 100%,
   mk-vegalite-spec(
-    spec: json("vega-lite-specs/firefox-mean-eval-time-vs-nix-version.json"),
+    mark: "boxplot",
+    encoding: (
+      x: (
+        title: "Nix version",
+        field: "info.nixVersion",
+        type: "ordinal",
+      ),
+      y: (
+        title: "Eval time (s)",
+        field: "eval.cpuTime",
+        type: "quantitative",
+        scale: ("zero": false),
+      ),
+    ),
   ),
 )
 
@@ -84,7 +97,20 @@
   width: 100%,
   height: 100%,
   mk-vegalite-spec(
-    spec: json("vega-lite-specs/firefox-mean-times-vs-nix-version.json"),
+    mark: "boxplot",
+    encoding: (
+      x: (
+        title: "Nix version",
+        field: "info.nixVersion",
+        type: "ordinal",
+      ),
+      y: (
+        title: "GC time (s)",
+        field: "eval.time.gc",
+        type: "quantitative",
+        scale: ("zero": false),
+      ),
+    ),
   ),
 )
 

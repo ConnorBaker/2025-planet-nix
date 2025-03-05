@@ -81,11 +81,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1740828860,
-        "narHash": "sha256-cjbHI+zUzK5CPsQZqMhE3npTyYFt9tJ3+ohcfaOF/WM=",
+        "lastModified": 1741010256,
+        "narHash": "sha256-WZNlK/KX7Sni0RyqLSqLPbK8k08Kq7H7RijPJbq9KHM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "303bd8071377433a2d8f76e684ec773d70c5b642",
+        "rev": "ba487dbc9d04e0634c64e3b1f0d25839a0a68246",
         "type": "github"
       },
       "original": {
@@ -95,14 +95,44 @@
         "type": "github"
       }
     },
+    "nulite": {
+      "inputs": {
+        "flake-parts": [
+          "flake-parts"
+        ],
+        "git-hooks-nix": [
+          "git-hooks-nix"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1741142689,
+        "narHash": "sha256-oWf4zAXR+wi+bkmt3ArZvfYIiz6Nq9a15JRX7OztfAc=",
+        "owner": "ConnorBaker",
+        "repo": "typst-vegalite",
+        "rev": "1e2967daf83503541576b939eacc93a4b3a4614e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ConnorBaker",
+        "ref": "feat/update",
+        "repo": "typst-vegalite",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
         "git-hooks-nix": "git-hooks-nix",
         "nixpkgs": "nixpkgs",
+        "nulite": "nulite",
         "treefmt-nix": "treefmt-nix",
-        "typix": "typix",
-        "typst-packages": "typst-packages"
+        "typix": "typix"
       }
     },
     "treefmt-nix": {
@@ -142,22 +172,6 @@
       "original": {
         "owner": "loqusion",
         "repo": "typix",
-        "type": "github"
-      }
-    },
-    "typst-packages": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1740736268,
-        "narHash": "sha256-px6mz3zanp6MSrXEfZ+dj8ilzg349LZ/h2jZDbCUqsU=",
-        "owner": "typst",
-        "repo": "packages",
-        "rev": "8f83b63a8a7ab3664696fb2958e8898d2b9f6fc0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "typst",
-        "repo": "packages",
         "type": "github"
       }
     }

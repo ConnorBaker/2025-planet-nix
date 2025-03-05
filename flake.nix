@@ -19,9 +19,14 @@
       url = "github:loqusion/typix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    typst-packages = {
-      flake = false;
-      url = "github:typst/packages";
+    nulite = {
+      url = "github:ConnorBaker/typst-vegalite/feat/update";
+      inputs = {
+        flake-parts.follows = "flake-parts";
+        git-hooks-nix.follows = "git-hooks-nix";
+        nixpkgs.follows = "nixpkgs";
+        treefmt-nix.follows = "treefmt-nix";
+      };
     };
   };
 
@@ -59,7 +64,12 @@
           cacheDirEnvName = optionalString (!isDarwin) "XDG_CACHE_" + "HOME";
 
           buildTypstPackagesCache =
-            typstPackagesSrc: typstProjectSrc:
+            {
+              # A list of directories each containing directories of the form `<namespace>/<package>/<version>`
+              packageSources,
+              # The Typst project to build
+              projectSource,
+            }:
             pkgs.stdenvNoCC.mkDerivation {
               __structuredAttrs = true;
               strictDeps = true;
@@ -69,31 +79,31 @@
               name = "typst-packages-cache";
               src = null;
 
-              inherit typstPackagesSrc;
-              inherit typstProjectSrc;
+              inherit packageSources;
+              inherit projectSource;
               inherit cacheDirPrefix;
 
               nativeBuildInputs = [ pkgs.ripgrep ];
 
               buildCommandPath = ./build-typst-packages-cache.bash;
-
-              postInstall = ''
-                if [[ -f "$outputPackagesDir/nulite/0.1.0/lib.typ" ]]; then
-                  nixLog "patching nulite 0.1.0"
-                  # Remove the symlink
-                  rm "$outputPackagesDir/nulite/0.1.0"
-                  # Copy the file
-                  cp -r "$inputPackagesDir/nulite/0.1.0" "$outputPackagesDir/nulite/0.1.0"
-                  # Patch the file
-                  substituteInPlace "$outputPackagesDir/nulite/0.1.0/lib.typ" \
-                    --replace-fail \
-                      '#let ctx-name = "@preview/vegalite"' \
-                      '#let ctx-name = "@preview/nulite"'
-                fi
-              '';
             };
 
-          typstPackagesCache = buildTypstPackagesCache inputs.typst-packages "${./imports.typ}";
+          typstPackagesCache =
+            let
+              preview = pkgs.fetchFromGitHub {
+                owner = "typst";
+                repo = "packages";
+                rev = "d4ac49c134db967fb251d6dccd8fcce472da1cb3";
+                hash = "";
+              };
+            in
+            buildTypstPackagesCache {
+              packageSources = [
+                "${preview}/packages"
+                "${pkgs.nulite-typst}/share/typst/packages"
+              ];
+              projectSource = ./.;
+            };
 
           src = toSource {
             root = ./.;
@@ -107,60 +117,48 @@
 
           commonArgs = {
             typstSource = "main.typ";
-
-            fontPaths = [
-              # Add paths to fonts here
-              "${pkgs.nacelle}/share/fonts/opentype"
-            ];
-
-            virtualPaths = [
-              # Add paths that must be locally accessible to typst here
-              # {
-              #   dest = "icons";
-              #   src = "${inputs.font-awesome}/svgs/regular";
-              # }
-            ];
+            fontPaths = [ "${pkgs.nacelle}/share/fonts/opentype" ];
+            virtualPaths = [ ];
           };
-
-          # Compile a Typst project, *without* copying the result
-          # to the current directory
-          build-drv = typixLib.buildTypstProject (
-            commonArgs
-            // {
-              inherit src;
-              ${cacheDirEnvName} = typstPackagesCache;
-            }
-          );
-
-          # Compile a Typst project, and then copy the result
-          # to the current directory
-          build-script = typixLib.buildTypstProjectLocal (
-            commonArgs
-            // {
-              inherit src;
-              ${cacheDirEnvName} = typstPackagesCache;
-            }
-          );
-
-          # Watch a project and recompile on changes
-          watch-script = typixLib.watchTypstProject commonArgs;
         in
         {
-          checks = {
-            inherit build-drv build-script watch-script;
+          _module.args.pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ inputs.nulite.overlays.default ];
           };
 
           packages = {
-            default = build-drv;
-            inherit typstPackagesCache;
-            typstPackagesSrc = inputs.typst-packages.outPath;
+            default = config.packages.build-drv;
+
+            # Compile a Typst project, *without* copying the result
+            # to the current directory
+            build-drv = typixLib.buildTypstProject (
+              commonArgs
+              // {
+                inherit src;
+                ${cacheDirEnvName} = typstPackagesCache;
+              }
+            );
+
+            # Compile a Typst project, and then copy the result
+            # to the current directory
+            build-script = typixLib.buildTypstProjectLocal (
+              commonArgs
+              // {
+                inherit src;
+                ${cacheDirEnvName} = typstPackagesCache;
+              }
+            );
+
+            # Watch a project and recompile on changes
+            watch-script = typixLib.watchTypstProject commonArgs;
           };
 
-          apps = {
-            default = config.apps.watch;
-            build.program = build-script;
-            watch.program = watch-script;
-          };
+          # apps = {
+          #   default = config.apps.watch;
+          #   build.program = build-script;
+          #   watch.program = watch-script;
+          # };
 
           devShells.default = typixLib.devShell {
             inherit (commonArgs) fontPaths virtualPaths;
@@ -168,9 +166,7 @@
               # WARNING: Don't run `typst-build` directly, instead use `nix run .#build`
               # See https://github.com/loqusion/typix/issues/2
               # build-script
-              watch-script
-              # More packages can be added here, like typstfmt
-              # pkgs.typstfmt
+              config.packages.watch-script
             ];
           };
 
@@ -190,13 +186,12 @@
           treefmt = {
             projectRootFile = "flake.nix";
             programs = {
-              # JSON, Markdown, YAML
+              # JSON, Markdown
               prettier = {
                 enable = true;
                 includes = [
                   "*.json"
                   "*.md"
-                  "*.yaml"
                 ];
                 settings = {
                   embeddedLanguageFormatting = "auto";
