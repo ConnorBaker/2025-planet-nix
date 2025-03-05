@@ -52,6 +52,13 @@ bfsProcessDependencies() {
   local packagesSource
   local inputPath
 
+  # shellcheck disable=SC2154
+  nixLog "configured to search for dependencies in the following packages sources:" \
+    "${packagesSources[@]}"
+
+  # Initialize the unprocessed dependencies
+  findUnprocessedDependencies "${projectSource:?}"
+
   # While there are unprocessed dependencies
   while ((${#unprocessedDependencies[@]} > 0)); do
     # Iterate through them
@@ -101,9 +108,6 @@ bfsProcessDependencies() {
 
   return 0
 }
-
-# Initialize the unprocessed dependencies
-findUnprocessedDependencies "${projectSource:?}"
 
 # Process the dependencies using a breadth-first search
 bfsProcessDependencies

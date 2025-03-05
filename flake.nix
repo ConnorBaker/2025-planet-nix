@@ -19,15 +19,6 @@
       url = "github:loqusion/typix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nulite = {
-      url = "github:ConnorBaker/typst-vegalite/feat/update";
-      inputs = {
-        flake-parts.follows = "flake-parts";
-        git-hooks-nix.follows = "git-hooks-nix";
-        nixpkgs.follows = "nixpkgs";
-        treefmt-nix.follows = "treefmt-nix";
-      };
-    };
   };
 
   outputs =
@@ -55,50 +46,42 @@
           inherit (lib.attrsets) attrValues;
           inherit (lib.fileset) toSource unions;
 
-          typixLib = inputs.typix.lib.${system};
+          typixLib = inputs.typix.lib.${system} // {
+            # Yay for slimming dependencies!
+            buildTypstPackagesCache = pkgs.callPackage ./buildTypstPackagesCache { };
+          };
 
-          buildTypstPackagesCache =
-            {
-              # A list of directories each containing directories of the form `<namespace>/<package>/<version>`
-              packagesSources,
-              # The Typst project to build
-              projectSource,
-            }:
-            # Produces an output containing containing directories of the form `<namespace>/<package>/<version>`.
-            # As such, the outPath can be provided to TYPST_PACKAGE_CACHE_PATH and TYPST_PACKAGE_PATH.
-            pkgs.stdenvNoCC.mkDerivation {
-              __structuredAttrs = true;
-              strictDeps = true;
-              preferLocalBuild = true;
-              allowSubstitutes = false;
+          # Contains `packages` in the outPath
+          # Though this is available as a flake, Darwin can't build it because rust fails to link a prerequisite.
+          nulite = pkgs.fetchzip {
+            name = "nulite-0.1.1";
+            url = "https://github.com/ConnorBaker/typst-vegalite/releases/download/v0.1.1/v0.1.1.tar.gz";
+            hash = "sha256-x4nm4JG2LmUZQNTNLWqzwWjSnQN0zgG01R+DUewYYJU=";
+            stripRoot = false; # Keeps the `packages` directory
+          };
 
-              name = "typst-packages-cache";
-              src = null;
+          # Contains `packages` in the outPath
+          typstPackages = pkgs.fetchFromGitHub {
+            name = "typst-packages-d4ac49c";
+            owner = "typst";
+            repo = "packages";
+            rev = "d4ac49c134db967fb251d6dccd8fcce472da1cb3";
+            hash = "sha256-xVj8uVLCb5wy76MVTcQKb+A129sBYu4KqgjYV/E2mJE=";
+          };
 
-              inherit packagesSources;
-              inherit projectSource;
+          aggregated-json = pkgs.fetchurl {
+            name = "aggregated-nixos-ext-5-runs-2-jobs.json";
+            url = "https://github.com/ConnorBaker/benchmarking-nix-eval/releases/download/v0.0.1/aggregated-nixos-ext-5-runs-2-jobs.json";
+            hash = "sha256-KhuifOGnYOAAwqcHlQNPTbxwSCf9HCQBIQRjkO6NHDI=";
+          };
 
-              nativeBuildInputs = [ pkgs.ripgrep ];
-
-              buildCommandPath = ./build-typst-packages-cache.bash;
-            };
-
-          typstPackagesCache =
-            let
-              preview = pkgs.fetchFromGitHub {
-                owner = "typst";
-                repo = "packages";
-                rev = "d4ac49c134db967fb251d6dccd8fcce472da1cb3";
-                hash = "sha256-xVj8uVLCb5wy76MVTcQKb+A129sBYu4KqgjYV/E2mJE=";
-              };
-            in
-            buildTypstPackagesCache {
-              packagesSources = [
-                "${preview}/packages"
-                "${pkgs.nulite-typst}/share/typst/packages"
-              ];
-              projectSource = ./.;
-            };
+          typstPackagesCache = typixLib.buildTypstPackagesCache {
+            packagesSources = [
+              "${typstPackages.outPath}/packages"
+              "${nulite.outPath}/packages"
+            ];
+            projectSource = ./imports.typ;
+          };
 
           commonArgs = {
             typstSource = "main.typ";
@@ -108,10 +91,15 @@
               TYPST_PACKAGE_CACHE_PATH = typstPackagesCache.outPath;
               TYPST_PACKAGE_PATH = typstPackagesCache.outPath;
             };
+            # Since the outPath of aggregated-json is the JSON file itself, we need to
+            # create a symlink to it so we can refer to it as `aggregated.json`.
+            preBuild = ''
+              nixLog "symlinking ${aggregated-json.outPath} to aggregated.json"
+              ln -s "${aggregated-json.outPath}" aggregated.json
+            '';
             src = toSource {
               root = ./.;
               fileset = unions [
-                ./aggregated.json
                 ./imports.typ
                 ./main.typ
                 ./vega-lite-specs
@@ -120,45 +108,26 @@
           };
         in
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ inputs.nulite.overlays.default ];
-          };
-
-          packages = {
-            default = config.packages.build-drv;
-
-            # Compile a Typst project, *without* copying the result
-            # to the current directory
-            build-drv = typixLib.buildTypstProject commonArgs;
-
-            # Compile a Typst project, and then copy the result
-            # to the current directory
-            build-script = typixLib.buildTypstProjectLocal commonArgs;
-
-            # Watch a project and recompile on changes
-            watch-script = typixLib.watchTypstProject (
-              builtins.removeAttrs commonArgs [
-                "env"
-                "src"
-              ]
-            );
-          };
-
-          apps = {
-            default = config.apps.watch;
-            build.program = config.packages.build-script;
-            watch.program = config.packages.watch-script;
-          };
+          packages.default = typixLib.buildTypstProject commonArgs;
 
           devShells.default = typixLib.devShell {
             inherit (commonArgs) fontPaths virtualPaths;
-            packages = attrValues config.treefmt.build.programs ++ [
-              # WARNING: Don't run `typst-build` directly, instead use `nix run .#build`
-              # See https://github.com/loqusion/typix/issues/2
-              # build-script
-              config.packages.watch-script
-            ];
+            packages = attrValues config.treefmt.build.programs;
+            # WARNING: Don't run `typst-build` directly, instead use `nix run .#build`
+            # See https://github.com/loqusion/typix/issues/2
+            inputsFrom = [ (typixLib.buildTypstProjectLocal commonArgs) ];
+            # If aggregated.json doesn't exist or is a symlink and doesn't refer to aggregated-json.outPath,
+            # remove it so we can create a new one.
+            shellHook = ''
+              if [[ ! -e aggregated.json ]]; then
+                echo "symlinking ${aggregated-json.outPath} to aggregated.json"
+                ln -s "${aggregated-json.outPath}" aggregated.json
+              elif [[ -L aggregated.json && $(readlink aggregated.json) != "${aggregated-json.outPath}" ]]; then
+                echo "refreshing symlink from ${aggregated-json.outPath} to aggregated.json"
+                rm aggregated.json
+                ln -s "${aggregated-json.outPath}" aggregated.json
+              fi
+            '';
           };
 
           pre-commit.settings.hooks = {
