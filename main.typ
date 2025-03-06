@@ -13,8 +13,8 @@
 #show: metropolis-theme.with(
   aspect-ratio: "4-3",
   config-info(
-    title: [Evaluating the Nix Evaluator],
-    subtitle: [Why Nix Performance Sometimes… Doesn't],
+    title: text(weight: "bold", size: 32pt)[Evaluating the Nix Evaluator],
+    subtitle: text(weight: "semibold")[Why Nix Performance Sometimes… Doesn't],
     author: [Connor Baker],
     date: datetime.today(),
     institution: [Planet Nix],
@@ -39,7 +39,7 @@
   ),
   config-methods(
     init: (self: none, body) => {
-      set text(size: 24pt)
+      set text(size: 24pt, font: "Nacelle")
       body
     },
   ),
@@ -66,20 +66,20 @@
   (
     config: (
       background: myColors.colors.neutral-lightest.to-hex(),
-      font: "Helvetica",
+      font: "Nacelle",
       axis: (
-        labelFont: "Helvetica",
+        labelFont: "Nacelle",
         labelFontSize: 18,
         labelFontWeight: "medium",
-        titleFont: "Helvetica",
+        titleFont: "Nacelle",
         titleFontSize: 24,
         titleFontWeight: "bold",
       ),
       legend: (
-        labelFont: "Helvetica",
+        labelFont: "Nacelle",
         labelFontSize: 18,
         labelFontWeight: "medium",
-        titleFont: "Helvetica",
+        titleFont: "Nacelle",
         titleFontSize: 24,
         titleFontWeight: "bold",
       ),
@@ -106,6 +106,7 @@
         field: "info.nixBenchConfig.tag",
         type: "ordinal",
       ),
+      color: ( value: "#3BB1D5" ),
       // color: (
       //   title: "Run type",
       //   field: "runType",
@@ -231,8 +232,8 @@
     ]
 ]
 
-#focus-slide[
-  Discussed improvements are *orthogonal* to those an *optimizing interpreter* provides.
+#focus-slide(align: horizon + left)[
+  These improvements are *orthogonal* to those of an *optimizing interpreter*.
   #speaker-note[
     - The improvements discussed in this talk are orthogonal to those an optimizing interpreter provides
     - An optimizing interpreter is a different approach to the problem of improving evaluation performance
@@ -304,3 +305,7 @@
 == Shrinking `Value`
 
 - TODO: Link to branch I have with these changes
+
+== We can't control how people use what we make
+
+f

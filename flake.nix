@@ -70,9 +70,9 @@
           };
 
           aggregated-json = pkgs.fetchurl {
-            name = "aggregated-nixos-ext-5-runs-2-jobs.json";
-            url = "https://github.com/ConnorBaker/benchmarking-nix-eval/releases/download/v0.0.1/aggregated-nixos-ext-5-runs-2-jobs.json";
-            hash = "sha256-KhuifOGnYOAAwqcHlQNPTbxwSCf9HCQBIQRjkO6NHDI=";
+            name = "aggregated-nixos-desktop-20-runs-1-job-no-boost.json";
+            url = "https://github.com/ConnorBaker/benchmarking-nix-eval/releases/download/v0.0.1/aggregated-nixos-desktop-20-runs-1-job-no-boost.json";
+            hash = "sha256-ZOG2vgbbSz+SlfluxXjuA8rcsf6DLGsQZ7HdJgnrhpI=";
           };
 
           typstPackagesCache = typixLib.buildTypstPackagesCache {
