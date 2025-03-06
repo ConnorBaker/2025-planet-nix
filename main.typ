@@ -45,41 +45,72 @@
   ),
 )
 
-#let vegalite-data = json("aggregated.json")
-#let mk-vegalite-spec(..spec) = {
-  utils.merge-dicts(
-    spec.named(),
-    (
-      data: (values: vegalite-data),
-      config: (
-        background: myColors.colors.neutral-lightest.to-hex(),
-        font: "Helvetica",
-        axis: (
-          labelFont: "Helvetica",
-          labelFontSize: 24,
-          labelFontWeight: "medium",
-          titleFont: "Helvetica",
-          titleFontSize: 32,
-          titleFontWeight: "bold",
-        ),
+// NOTE: Generally faster to do transformations in typst than in Vega-Lite.
+#let vegalite-data = json("aggregated.json").map(datum => utils.merge-dicts(
+  datum,
+  (
+    info: (
+      attrPathString: datum.info.attrPath.join("."),
+      runType: if not datum.info.nixBenchConfig.useBDWGC {
+        "noBDWGC"
+      } else if datum.info.nixBenchConfig.dontGC {
+        "dontGC"
+      } else {
+        "useBDWGC"
+      },
+    ),
+  ),
+))
+#let mk-vegalite-spec = spec => utils.merge-dicts(
+  spec,
+  (
+    config: (
+      background: myColors.colors.neutral-lightest.to-hex(),
+      font: "Helvetica",
+      axis: (
+        labelFont: "Helvetica",
+        labelFontSize: 18,
+        labelFontWeight: "medium",
+        titleFont: "Helvetica",
+        titleFontSize: 24,
+        titleFontWeight: "bold",
+      ),
+      legend: (
+        labelFont: "Helvetica",
+        labelFontSize: 18,
+        labelFontWeight: "medium",
+        titleFont: "Helvetica",
+        titleFontSize: 24,
+        titleFontWeight: "bold",
       ),
     ),
-  )
-}
+  ),
+)
 
-== Firefox evaluation time vs Nix version
+== Evaluating `firefox-unwrapped`
 
 #nulite.render(
   width: 100%,
   height: 100%,
-  mk-vegalite-spec(
+  mk-vegalite-spec((
+    // Doing the filtering in typst is much faster than in Vega-Lite
+    data: (
+      values: vegalite-data.filter(datum => (
+        datum.info.attrPathString == "firefox-unwrapped" and datum.info.runType == "useBDWGC"
+      )),
+    ),
     mark: "boxplot",
     encoding: (
       x: (
-        title: "Nix version",
-        field: "info.nixVersion",
+        title: "Tag",
+        field: "info.nixBenchConfig.tag",
         type: "ordinal",
       ),
+      // color: (
+      //   title: "Run type",
+      //   field: "runType",
+      //   type: "nominal",
+      // ),
       y: (
         title: "Eval time (s)",
         field: "eval.cpuTime",
@@ -87,152 +118,189 @@
         scale: ("zero": false),
       ),
     ),
-  ),
+  )),
 )
 
 
-== Firefox times vs Nix version
+// == Evaluating `iso_gnome`
 
-#nulite.render(
-  width: 100%,
-  height: 100%,
-  mk-vegalite-spec(
-    mark: "boxplot",
-    encoding: (
-      x: (
-        title: "Nix version",
-        field: "info.nixVersion",
-        type: "ordinal",
-      ),
-      y: (
-        title: "GC time (s)",
-        field: "eval.time.gc",
-        type: "quantitative",
-        scale: ("zero": false),
-      ),
-    ),
-  ),
-)
+// #nulite.render(
+//   width: 100%,
+//   height: 100%,
+//   mk-vegalite-spec((
+//     transform: (
+//       (
+//         filter: "datum.attrPathString === 'iso_gnome.x86_64-linux'",
+//       ),
+//       (
+//         filter: "datum.runType === 'useBDWGC'",
+//       ),
+//     ),
+//     mark: "boxplot",
+//     encoding: (
+//       x: (
+//         title: "Tag",
+//         field: "info.nixBenchConfig.tag",
+//         type: "ordinal",
+//       ),
+//       // color: (
+//       //   title: "Run type",
+//       //   field: "runType",
+//       //   type: "nominal",
+//       // ),
+//       y: (
+//         title: "Eval time (s)",
+//         field: "eval.cpuTime",
+//         type: "quantitative",
+//         scale: ("zero": false),
+//       ),
+//     ),
+//   )),
+// )
 
 
-// #title-slide()
-// #speaker-note[
-//   Nix evaluation performance is a known, long-standing issue to the community.
-//   This talk will cover a benchmarking setup, concessions to that setup made to retain the author's sanity, and ways to improve evaluation performance and their trade-offs.
-// ]
+// == Firefox times vs Nix version
 
-// = Assumptions #emoji.bookmark
+// #nulite.render(
+//   width: 100%,
+//   height: 100%,
+//   mk-vegalite-spec(
+//     mark: "boxplot",
+//     encoding: (
+//       x: (
+//         title: "Nix version",
+//         field: "info.nixVersion",
+//         type: "ordinal",
+//       ),
+//       y: (
+//         title: "GC time (s)",
+//         field: "eval.time.gc",
+//         type: "quantitative",
+//         scale: ("zero": false),
+//       ),
+//     ),
+//   ),
+// )
 
-// #speaker-note[
-//   - Two important assumptions we need to make
-// ]
 
-// == Nix evaluation performance...
+#title-slide()
+#speaker-note[
+  Nix evaluation performance is a known, long-standing issue to the community.
+  This talk will cover a benchmarking setup, concessions to that setup made to retain the author's sanity, and ways to improve evaluation performance and their trade-offs.
+]
 
-// #slide[
-//   #pause
-//   1. Can improve? #pause
-//     #speaker-note[
-//       - First, we're assuming we can improve the performance of the Nix evaluator
-//       - This assumption is about possibility: does there exist some way to improve performance?
-//     ]
-//     - Historically, yes!
-//     #speaker-note[
-//       - Historically, this has been the case
-//       - Improvements from string interning with a symbol table, special-cased arrays of sizes 0, 1, and 2, and more
-//       - Even improvements to the packaging of Nix itself: after the switch to Meson, building with optimization level three and enabling LTO
-//       - TODO(@ConnorBaker): LINK FOR THE ABOVE PR SO WE CAN QUOTE PERFORMANCE DIFFERENCE
-//       - It's a codebase which has grown organically over time, written in a language which has also grown over time (jab at C++)
-//     ]
-// ][
-//   #pause
-//   2. Should improve? #pause
-//     #speaker-note[
-//       - The second assumption is that it is worthwhile to improve the performance of the Nix evaluator
-//       - This assumption is about practicality: for some impelementation change, is it worthwhile to make that change?
-//     ]
-//     - It depends!
-//     #speaker-note[
-//       - As with anything, it depends
-//       - There are always tradeoffs to be made
-//       - For example:
-//         - favoring algorithms efficient in terms of time time but not space
-//         - restricting baseline functionality to acheive greater portability
-//         - selecting complex implementations for performance over maintainability
-//       - The question of whether we *should* make an improvement is going to depend on the nature of the improvement
-//     ]
-// ]
+= Assumptions #emoji.bookmark
 
-// #focus-slide[
-//   Discussed improvements are *orthogonal* to those an *optimizing interpreter* provides.
-//   #speaker-note[
-//     - The improvements discussed in this talk are orthogonal to those an optimizing interpreter provides
-//     - An optimizing interpreter is a different approach to the problem of improving evaluation performance
-//     - It is not the focus of this talk, but it is worth mentioning
-//   ]
-// ]
+#speaker-note[
+  - Two important assumptions we need to make
+]
 
-// = Benchmarking setup #emoji.clock
+== Nix evaluation performance...
 
-// == What do we want to measure?
+#slide[
+  #pause
+  1. Can improve? #pause
+    #speaker-note[
+      - First, we're assuming we can improve the performance of the Nix evaluator
+      - This assumption is about possibility: does there exist some way to improve performance?
+    ]
+    - Historically, yes!
+    #speaker-note[
+      - Historically, this has been the case
+      - Improvements from string interning with a symbol table, special-cased arrays of sizes 0, 1, and 2, and more
+      - Even improvements to the packaging of Nix itself: after the switch to Meson, building with optimization level three and enabling LTO
+      - TODO(@ConnorBaker): LINK FOR THE ABOVE PR SO WE CAN QUOTE PERFORMANCE DIFFERENCE
+      - It's a codebase which has grown organically over time, written in a language which has also grown over time (jab at C++)
+    ]
+][
+  #pause
+  2. Should improve? #pause
+    #speaker-note[
+      - The second assumption is that it is worthwhile to improve the performance of the Nix evaluator
+      - This assumption is about practicality: for some impelementation change, is it worthwhile to make that change?
+    ]
+    - It depends!
+    #speaker-note[
+      - As with anything, it depends
+      - There are always tradeoffs to be made
+      - For example:
+        - favoring algorithms efficient in terms of time time but not space
+        - restricting baseline functionality to acheive greater portability
+        - selecting complex implementations for performance over maintainability
+      - The question of whether we *should* make an improvement is going to depend on the nature of the improvement
+    ]
+]
 
-// - Space #emoji.sparkles
-// - Time #emoji.hourglass
+#focus-slide[
+  Discussed improvements are *orthogonal* to those an *optimizing interpreter* provides.
+  #speaker-note[
+    - The improvements discussed in this talk are orthogonal to those an optimizing interpreter provides
+    - An optimizing interpreter is a different approach to the problem of improving evaluation performance
+    - It is not the focus of this talk, but it is worth mentioning
+  ]
+]
 
-// == Why do we want to measure it?
+= Benchmarking setup #emoji.clock
 
-// - TODO
+== What do we want to measure?
 
-// == How will we measure it?
+- Space #emoji.sparkles
+- Time #emoji.hourglass
 
-// - TODO
+== Why do we want to measure it?
 
-// = Data visualization #emoji.chart
+- TODO
 
-// // Briefly, the setup.
-// // What do we see?
+== How will we measure it?
 
-// == Nix evaluation performance trends
+- TODO
 
-// - Charts for evaluation performance over time
-// - Discuss axes on which evaluation can be expensive
-//   - Evaluator implementation
-//   - Nix data structures
-//   - Nix expressions
+= Data visualization #emoji.chart
 
-// == What's with all the garbage?
+// Briefly, the setup.
+// What do we see?
 
-// - TODO: benchmarks without GC running and without Boehm entirely
-// - Transition to looking at the actual implementations
+== Nix evaluation performance trends
 
-// = Abridged data structures of the evaluator #emoji.helix
+- Charts for evaluation performance over time
+- Discuss axes on which evaluation can be expensive
+  - Evaluator implementation
+  - Nix data structures
+  - Nix expressions
 
-// #speaker-note[
-//   TODO: Where's the narrative?
-//   Should discuss data structures like strings, lists, and attribute sets, and the way people interact with them.
-//   From there, create a small set of high-performance, composable builtins and build on that.
-// ]
+== What's with all the garbage?
 
-// == Value
+- TODO: benchmarks without GC running and without Boehm entirely
+- Transition to looking at the actual implementations
 
-// - Padding, etc.
+= Abridged data structures of the evaluator #emoji.helix
 
-// == List
+#speaker-note[
+  TODO: Where's the narrative?
+  Should discuss data structures like strings, lists, and attribute sets, and the way people interact with them.
+  From there, create a small set of high-performance, composable builtins and build on that.
+]
 
-// - Special-cased for lists of size 0, 1, and 2, which can fit in a Value
+== Value
 
-// == Attribute set
+- Padding, etc.
 
-// - TODO: has it changed? I remember there being two arrays (one for names, one for values), but now it seems to be a vector of tuples.
+== List
 
-// = Possible improvements
+- Special-cased for lists of size 0, 1, and 2, which can fit in a Value
 
-// == Persistent data structures
+== Attribute set
 
-// - TODO
-// - I mean, functional programming language with immutable values so why not benefit from sharing?
-// - Describe Immer library
+- TODO: has it changed? I remember there being two arrays (one for names, one for values), but now it seems to be a vector of tuples.
 
-// == Shrinking `Value`
+= Possible improvements
 
-// - TODO: Link to branch I have with these changes
+== Persistent data structures
+
+- TODO
+- I mean, functional programming language with immutable values so why not benefit from sharing?
+- Describe Immer library
+
+== Shrinking `Value`
+
+- TODO: Link to branch I have with these changes

@@ -111,7 +111,7 @@
           packages.default = typixLib.buildTypstProject commonArgs;
 
           devShells.default = typixLib.devShell {
-            inherit (commonArgs) fontPaths virtualPaths;
+            inherit (commonArgs) env fontPaths virtualPaths;
             packages = attrValues config.treefmt.build.programs;
             # WARNING: Don't run `typst-build` directly, instead use `nix run .#build`
             # See https://github.com/loqusion/typix/issues/2
