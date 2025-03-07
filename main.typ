@@ -103,7 +103,7 @@
 - Each benchmark uses 20 runs
 - Median values are plotted
 
-// #include "eval-charts.typ"
+#include "eval-charts.typ"
 
 == Nix evaluation performance trends
 
