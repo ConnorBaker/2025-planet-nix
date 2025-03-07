@@ -87,12 +87,13 @@
 
 == `benchmarking-nix-eval`
 
-- Allows matrixing Nix packages and configurations through flakes
+- A Nix flake for benchmarking the Nix flake #footnote(link("https://github.com/ConnorBaker/benchmarking-nix-eval"))
+- Matrix Nix packages and configurations through flakes
 - Runs `time nix eval` inside the sandbox $n$ times
 - Collects the results with some additional metadata into JSON
 - Data is suitable for visualization with VegaLite
 
-#footnote(link("https://github.com/ConnorBaker/benchmarking-nix-eval"))
+---
 
 #focus-slide(align: horizon + left)[
   This presentation uses *VegaLite* through *WASM* as a *Typst* package.
@@ -118,7 +119,10 @@
 == Software setup
 
 - Latest minor versions of Nix (2.13-2.26)
-- 20 runs of each benchmark, one at a time, with and without GC
+- Benchmarks run one at a time, 20 times each for each config
+  - With collection (GC)
+  - Without collection (dontGC)
+  - Without BDWGC (noBDWGC)
 - Median values are plotted
   - Observed little variation between runs
 - Generated data is available #footnote(link("https://github.com/ConnorBaker/benchmarking-nix-eval/releases/download/v0.0.1/aggregated-nixos-desktop-20-runs-1-job-no-boost.json"))
@@ -128,14 +132,14 @@
 == Summary
 
 - If you need faster evaluation, set `GC_DONT_GC`
-  - `nix-eval-jobs` does this #footnote(link("https://github.com/nix-community/nix-eval-jobs/blob/4b392b284877d203ae262e16af269f702df036bc/src/nix-eval-jobs.cc#L421-L422"))
-- `GC_DONT_GC` is faster than no BDWGC
-  - BDWGC has
-
-== What's with all the garbage?
-
-- TODO: benchmarks without GC running and without Boehm entirely
-- Transition to looking at the actual implementations
+  - `nix-eval-jobs` (and Hydra) do this #footnote(link("https://github.com/nix-community/nix-eval-jobs/blob/4b392b284877d203ae262e16af269f702df036bc/src/nix-eval-jobs.cc#L421-L422"))
+- No GC is slower than using BDWGC
+  - Individual allocations vs. batched allocations
+- No GC uses less memory than BDWGC
+  - No bookkeeping overhead
+- Evaluation should be separate from builds
+  - Cache derivations
+  - Build separately to avoid resource contention
 
 = Evaluator structures #emoji.helix
 
@@ -147,16 +151,32 @@
 
 == Value
 
-- Padding, etc.
+- Less than 20 possible (internal) types
+- Structure is 24 bytes
+  - 8 bytes (due to padding) for the type
+  - 16 bytes for the actual content
+- Created everywhere during evaluation
 
 == List
 
-- Special-cased for lists of size 0, 1, and 2, which can fit in a Value
-- Implemented as a C-style array, so great data locality
+- 0/1/2 element lists are inlined into a `Value`
+- Otherwise, a C-style array of `Value *`
+  - Fantastic data locality
+  - No sharing of existing values
 
 == Attribute set
 
-- TODO: has it changed? I remember there being two arrays (one for names, one for values), but now it seems to be a vector of tuples.
+- C-style array of `Attr`, a structure with three fields
+  - `Symbol name` (4 bytes)
+  - `PosIdx pos` (4 bytes)
+  - `Value * value` (8 bytes)
+
+== Design
+
+- Primitives for operating on values should:
+  - be performant
+  - be composable
+- Data structure implementation should make the primitives exposed
 
 = Improvements #emoji.crystal
 
@@ -169,15 +189,13 @@
   ]
 ]
 
-== Persistent data structures
+#focus-slide(align: horizon + left)[
+  Data structures supporting *sharing*.
+]
 
-- TODO
-- I mean, functional programming language with immutable values so why not benefit from sharing?
-- Describe Immer library
-
-== Shrinking structures
-
-- TODO: Link to branch I have with these changes
+#focus-slide(align: horizon + left)[
+  Shrinking the *Value* struct.
+]
 
 = Future work #emoji.magnify
 
