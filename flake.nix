@@ -100,10 +100,10 @@
             src = toSource {
               root = ./.;
               fileset = unions [
-                ./eval-charts.typ
+                ./charts.typ
                 ./imports.typ
                 ./main.typ
-                ./utils.typ
+                ./theme.typ
               ];
             };
           };

@@ -1,14 +1,7 @@
 #import "imports.typ": *
-#import "utils.typ": *
+#import "theme.typ": *
 
 #show: configure-theme(metropolis-theme)
-
-// TODO:
-// For benchmarking repo:
-// - use nixos modules to build configurations to enable docs and type checking
-// - the name of the
-
-// NOTE: real/user/sys times are largely the same, not worth looking at
 
 #title-slide()
 #speaker-note[
@@ -65,7 +58,7 @@
     ]
 ]
 
-= Benchmarking setup #emoji.clock
+= Benchmarking #emoji.clock
 
 #focus-slide(align: horizon + left)[
   Benchmarking is *difficult*.
@@ -79,39 +72,65 @@
   ]
 ]
 
-== What do we want to measure?
+== What can we easily measure?
 
-- Space
-- Time
+- Data reported by `NIX_SHOW_STATS`
+  - CPU/GC time, number of certain operations, etc.
+- Data reported by GNU `time`
+  - IO: context switches, page faults, etc.
+  - Memory: page size, maximum resident set size, etc.
+  - Time: real, user, and sys time
 
-== Why do we want to measure it?
+#speaker-note[
+  - How will we do the measurements?
+]
 
-- TODO
+== `benchmarking-nix-eval`
 
-== How will we measure it?
+- Allows matrixing Nix packages and configurations through flakes
+- Runs `time nix eval` inside the sandbox $n$ times
+- Collects the results with some additional metadata into JSON
+- Data is suitable for visualization with VegaLite
 
-- TODO
+#footnote(link("https://github.com/ConnorBaker/benchmarking-nix-eval"))
+
+#focus-slide(align: horizon + left)[
+  This presentation uses *VegaLite* through *WASM* as a *Typst* package.
+]
 
 = Examples #emoji.chart
 
 // Prior to performance numbers section, mention how of the three types, only looking at two.
 
-== Setup
+== Testbed setup
 
-- Intel i9-13900K (locked to 3 GHz) with 96 GB DDR5
-- Four-way ZFS RAID0 with integrity protections disabled
-- Each benchmark uses 20 runs
+- Intel i9-13900K \@ 3 GHz
+  - Did not change niceness/pin to a favored core
+- 96 GB DDR5 RAM
+  - Did not attempt flushing caches
+- Four-way ZFS RAID0
+  - No deduplication/compression/integrity checking (just ARC)
+  - Did not change IO niceness/flush caches
+- Linux 6.12.13
+- NixOS unstable \@ `2ff53fe` (2025-02-13)
+- `mimalloc` as the default allocator
+
+== Software setup
+
+- Latest minor versions of Nix (2.13-2.26)
+- 20 runs of each benchmark, one at a time, with and without GC
 - Median values are plotted
+  - Observed little variation between runs
+- Generated data is available #footnote(link("https://github.com/ConnorBaker/benchmarking-nix-eval/releases/download/v0.0.1/aggregated-nixos-desktop-20-runs-1-job-no-boost.json"))
 
-#include "eval-charts.typ"
+#include "charts.typ"
 
-== Nix evaluation performance trends
+== Summary
 
-- Charts for evaluation performance over time
-- Discuss axes on which evaluation can be expensive
-  - Evaluator implementation
-  - Nix data structures
-  - Nix expressions
+- If you need faster evaluation, set `GC_DONT_GC`
+  - `nix-eval-jobs` does this #footnote(link("https://github.com/nix-community/nix-eval-jobs/blob/4b392b284877d203ae262e16af269f702df036bc/src/nix-eval-jobs.cc#L421-L422"))
+- `GC_DONT_GC` is faster than no BDWGC
+  - BDWGC has
 
 == What's with all the garbage?
 
@@ -159,3 +178,12 @@
 == Shrinking structures
 
 - TODO: Link to branch I have with these changes
+
+= Future work #emoji.magnify
+
+== Future work
+
+- Modularizing `benchmarking-nix-eval`
+- Adding more benchmarks
+- Building a web dashboard to visualize the data
+- Integration into CI to detect regressions
