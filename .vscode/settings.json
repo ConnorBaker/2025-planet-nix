@@ -1,4 +1,6 @@
 {
   "tinymist.formatterMode": "typstyle",
-  "tinymist.preview.refresh": "onSave"
+  "tinymist.preview.refresh": "onSave",
+  "tinymist.exportPdf": "never",
+  "tinymist.preview.partialRendering": false
 }

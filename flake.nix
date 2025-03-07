@@ -100,9 +100,10 @@
             src = toSource {
               root = ./.;
               fileset = unions [
+                ./eval-charts.typ
                 ./imports.typ
                 ./main.typ
-                ./vega-lite-specs
+                ./utils.typ
               ];
             };
           };

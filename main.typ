@@ -1,188 +1,14 @@
-#import "/imports.typ": *
-#import themes.metropolis: *
+#import "imports.typ": *
+#import "utils.typ": *
 
-#let myColors = config-colors(
-  primary: rgb("#3BB1D5"),
-  primary-light: rgb("#3BB1D5"),
-  secondary: rgb("#2C3133"),
-  neutral-lightest: rgb("#fafafa"),
-  neutral-dark: rgb("#2C3133"),
-  neutral-darkest: rgb("#2C3133"),
-)
+#show: configure-theme(metropolis-theme)
 
-#show: metropolis-theme.with(
-  aspect-ratio: "4-3",
-  config-info(
-    title: text(weight: "bold", size: 32pt)[Evaluating the Nix Evaluator],
-    subtitle: text(weight: "semibold")[Why Nix Performance Sometimes… Doesn't],
-    author: [Connor Baker],
-    date: datetime.today(),
-    institution: [Planet Nix],
-    logo: emoji.rainbow,
-  ),
-  config-page(
-    paper: "presentation-4-3",
-    header-ascent: 30%,
-    footer-descent: 30%,
-    margin: (top: 3em, bottom: 1.5em, x: 2em),
-  ),
-  header-right: [],
-  footer: [],
-  footer-progress: false,
-  config-colors(
-    primary: rgb("#3BB1D5"),
-    primary-light: rgb("#3BB1D5"),
-    secondary: rgb("#2C3133"),
-    neutral-lightest: rgb("#fafafa"),
-    neutral-dark: rgb("#2C3133"),
-    neutral-darkest: rgb("#2C3133"),
-  ),
-  config-methods(
-    init: (self: none, body) => {
-      set text(size: 24pt, font: "Nacelle")
-      body
-    },
-  ),
-)
+// TODO:
+// For benchmarking repo:
+// - use nixos modules to build configurations to enable docs and type checking
+// - the name of the
 
-// NOTE: Generally faster to do transformations in typst than in Vega-Lite.
-#let vegalite-data = json("aggregated.json").map(datum => utils.merge-dicts(
-  datum,
-  (
-    info: (
-      attrPathString: datum.info.attrPath.join("."),
-      runType: if not datum.info.nixBenchConfig.useBDWGC {
-        "noBDWGC"
-      } else if datum.info.nixBenchConfig.dontGC {
-        "dontGC"
-      } else {
-        "useBDWGC"
-      },
-    ),
-  ),
-))
-#let mk-vegalite-spec = spec => utils.merge-dicts(
-  spec,
-  (
-    config: (
-      background: myColors.colors.neutral-lightest.to-hex(),
-      font: "Nacelle",
-      axis: (
-        labelFont: "Nacelle",
-        labelFontSize: 18,
-        labelFontWeight: "medium",
-        titleFont: "Nacelle",
-        titleFontSize: 24,
-        titleFontWeight: "bold",
-      ),
-      legend: (
-        labelFont: "Nacelle",
-        labelFontSize: 18,
-        labelFontWeight: "medium",
-        titleFont: "Nacelle",
-        titleFontSize: 24,
-        titleFontWeight: "bold",
-      ),
-    ),
-  ),
-)
-
-== Evaluating `firefox-unwrapped`
-
-#nulite.render(
-  width: 100%,
-  height: 100%,
-  mk-vegalite-spec((
-    // Doing the filtering in typst is much faster than in Vega-Lite
-    data: (
-      values: vegalite-data.filter(datum => (
-        datum.info.attrPathString == "firefox-unwrapped" and datum.info.runType == "useBDWGC"
-      )),
-    ),
-    mark: "boxplot",
-    encoding: (
-      x: (
-        title: "Tag",
-        field: "info.nixBenchConfig.tag",
-        type: "ordinal",
-      ),
-      color: ( value: "#3BB1D5" ),
-      // color: (
-      //   title: "Run type",
-      //   field: "runType",
-      //   type: "nominal",
-      // ),
-      y: (
-        title: "Eval time (s)",
-        field: "eval.cpuTime",
-        type: "quantitative",
-        scale: ("zero": false),
-      ),
-    ),
-  )),
-)
-
-
-// == Evaluating `iso_gnome`
-
-// #nulite.render(
-//   width: 100%,
-//   height: 100%,
-//   mk-vegalite-spec((
-//     transform: (
-//       (
-//         filter: "datum.attrPathString === 'iso_gnome.x86_64-linux'",
-//       ),
-//       (
-//         filter: "datum.runType === 'useBDWGC'",
-//       ),
-//     ),
-//     mark: "boxplot",
-//     encoding: (
-//       x: (
-//         title: "Tag",
-//         field: "info.nixBenchConfig.tag",
-//         type: "ordinal",
-//       ),
-//       // color: (
-//       //   title: "Run type",
-//       //   field: "runType",
-//       //   type: "nominal",
-//       // ),
-//       y: (
-//         title: "Eval time (s)",
-//         field: "eval.cpuTime",
-//         type: "quantitative",
-//         scale: ("zero": false),
-//       ),
-//     ),
-//   )),
-// )
-
-
-// == Firefox times vs Nix version
-
-// #nulite.render(
-//   width: 100%,
-//   height: 100%,
-//   mk-vegalite-spec(
-//     mark: "boxplot",
-//     encoding: (
-//       x: (
-//         title: "Nix version",
-//         field: "info.nixVersion",
-//         type: "ordinal",
-//       ),
-//       y: (
-//         title: "GC time (s)",
-//         field: "eval.time.gc",
-//         type: "quantitative",
-//         scale: ("zero": false),
-//       ),
-//     ),
-//   ),
-// )
-
+// NOTE: real/user/sys times are largely the same, not worth looking at
 
 #title-slide()
 #speaker-note[
@@ -190,13 +16,19 @@
   This talk will cover a benchmarking setup, concessions to that setup made to retain the author's sanity, and ways to improve evaluation performance and their trade-offs.
 ]
 
+== Topics covered
+
+- Benchmarking setup
+- Nix evaluation performance over time
+- Suggested areas for improvement
+
 = Assumptions #emoji.bookmark
 
 #speaker-note[
   - Two important assumptions we need to make
 ]
 
-== Nix evaluation performance...
+== Nix evaluation performance
 
 #slide[
   #pause
@@ -229,24 +61,28 @@
         - restricting baseline functionality to acheive greater portability
         - selecting complex implementations for performance over maintainability
       - The question of whether we *should* make an improvement is going to depend on the nature of the improvement
+      - TODO: Transition to need for benchmarking -- maybe something about needing to be able to measure improvements
     ]
-]
-
-#focus-slide(align: horizon + left)[
-  These improvements are *orthogonal* to those of an *optimizing interpreter*.
-  #speaker-note[
-    - The improvements discussed in this talk are orthogonal to those an optimizing interpreter provides
-    - An optimizing interpreter is a different approach to the problem of improving evaluation performance
-    - It is not the focus of this talk, but it is worth mentioning
-  ]
 ]
 
 = Benchmarking setup #emoji.clock
 
+#focus-slide(align: horizon + left)[
+  Benchmarking is *difficult*.
+  #speaker-note[
+    - Truly an exercise fraught with peril
+    - Modern consumer processors throttle hard, so need to disable boosting
+    - Need to change governor to performance to avoid latency in scaling up
+    - Need to run on a quiet system to minimize context switching
+    - TODO: Discuss benchmark setup, caveats like caching, boosting, thermal throttling, etc
+    - TODO: Discuss limitations of setup, like using the flake's toolchain and copy of Nixpkgs
+  ]
+]
+
 == What do we want to measure?
 
-- Space #emoji.sparkles
-- Time #emoji.hourglass
+- Space
+- Time
 
 == Why do we want to measure it?
 
@@ -256,10 +92,18 @@
 
 - TODO
 
-= Data visualization #emoji.chart
+= Examples #emoji.chart
 
-// Briefly, the setup.
-// What do we see?
+// Prior to performance numbers section, mention how of the three types, only looking at two.
+
+== Setup
+
+- Intel i9-13900K (locked to 3 GHz) with 96 GB DDR5
+- Four-way ZFS RAID0 with integrity protections disabled
+- Each benchmark uses 20 runs
+- Median values are plotted
+
+// #include "eval-charts.typ"
 
 == Nix evaluation performance trends
 
@@ -274,7 +118,7 @@
 - TODO: benchmarks without GC running and without Boehm entirely
 - Transition to looking at the actual implementations
 
-= Abridged data structures of the evaluator #emoji.helix
+= Evaluator structures #emoji.helix
 
 #speaker-note[
   TODO: Where's the narrative?
@@ -289,12 +133,22 @@
 == List
 
 - Special-cased for lists of size 0, 1, and 2, which can fit in a Value
+- Implemented as a C-style array, so great data locality
 
 == Attribute set
 
 - TODO: has it changed? I remember there being two arrays (one for names, one for values), but now it seems to be a vector of tuples.
 
-= Possible improvements
+= Improvements #emoji.crystal
+
+#focus-slide(align: horizon + left)[
+  Suggested improvements should be *orthogonal* to those an *optimizing* or *parallel interpreter* would provide.
+  #speaker-note[
+    - The improvements discussed in this talk are orthogonal to those an optimizing interpreter provides
+    - An optimizing interpreter is a different approach to the problem of improving evaluation performance
+    - It is not the focus of this talk, but it is worth mentioning
+  ]
+]
 
 == Persistent data structures
 
@@ -302,10 +156,6 @@
 - I mean, functional programming language with immutable values so why not benefit from sharing?
 - Describe Immer library
 
-== Shrinking `Value`
+== Shrinking structures
 
 - TODO: Link to branch I have with these changes
-
-== We can't control how people use what we make
-
-f
